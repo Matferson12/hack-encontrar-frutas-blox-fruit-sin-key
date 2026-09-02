@@ -1,0 +1,90 @@
+-- Script Base Auto Farm (Fase 1) para Xeno
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
+local autoFarm = false
+
+-- Evita que el juego te saque por estar AFK
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
+end)
+
+-- Buscar el enemigo vivo más cercano
+local function obtenerEnemigoCercano()
+    local distanciaCorta = math.huge
+    local enemigoObjetivo = nil
+    local char = LocalPlayer.Character
+
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+
+    local npcs = Workspace:FindFirstChild("Enemies") or Workspace
+    for _, npc in pairs(npcs:GetChildren()) do
+        local hum = npc:FindFirstChild("Humanoid")
+        local hrp = npc:FindFirstChild("HumanoidRootPart")
+        
+        if hum and hrp and hum.Health > 0 then
+            local dist = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
+            if dist < distanciaCorta then
+                distanciaCorta = dist
+                enemigoObjetivo = npc
+            end
+        end
+    end
+    return enemigoObjetivo
+end
+
+-- Interfaz básica para probar
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFarmBase"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end)
+
+local Boton = Instance.new("TextButton")
+Boton.Size = UDim2.new(0, 160, 0, 40)
+Boton.Position = UDim2.new(0.05, 0, 0.3, 0)
+Boton.Text = "FARM: OFF"
+Boton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+Boton.TextColor3 = Color3.fromRGB(255, 255, 255)
+Boton.Font = Enum.Font.SourceSansBold
+Boton.TextSize = 16
+Boton.Active = true
+Boton.Draggable = true
+Boton.Parent = ScreenGui
+
+Boton.MouseButton1Click:Connect(function()
+    autoFarm = not autoFarm
+    if autoFarm then
+        Boton.Text = "FARM: ON"
+        Boton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        Boton.Text = "FARM: OFF"
+        Boton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+-- Bucle principal del Farm
+task.spawn(function()
+    while task.wait(0.1) do
+        if autoFarm then
+            local char = LocalPlayer.Character
+            local objetivo = obtenerEnemigoCercano()
+
+            if char and char:FindFirstChild("HumanoidRootPart") and objetivo then
+                local hrpEnemigo = objetivo:FindFirstChild("HumanoidRootPart")
+                
+                if hrpEnemigo then
+                    -- Posiciona a tu personaje 5 studs arriba del enemigo
+                    char.HumanoidRootPart.CFrame = hrpEnemigo.CFrame * CFrame.new(0, 5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                    
+                    -- Simula el clic de ataque
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton1(Vector2.new(500, 500))
+                end
+            end
+        end
+    end
+end)
