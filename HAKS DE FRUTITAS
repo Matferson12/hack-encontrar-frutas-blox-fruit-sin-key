@@ -1,90 +1,194 @@
--- Script Base Auto Farm (Fase 1) para Xeno
-local Players = game:GetService("Players")
+-- Script Detector de Frutas por Rareza + TP Prioritario para Xeno
 local Workspace = game:GetService("Workspace")
-local VirtualUser = game:GetService("VirtualUser")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
-local autoFarm = false
+local activo = false
+local lineas = {}
 
--- Evita que el juego te saque por estar AFK
-LocalPlayer.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), Workspace.CurrentCamera.CFrame)
-end)
+-- Tabla de rarezas y sus colores
+local RAREZAS = {
+    Mitica = {
+        Color = Color3.fromRGB(255, 0, 128), -- Rosado / Magenta brillante
+        Prioridad = 5,
+        Frutas = {"kitsune", "dragon", "leopard", "dough", "t-rex", "spirit", "venom", "shadow", "blizzard", "gravity", "mammoth"}
+    },
+    Legendaria = {
+        Color = Color3.fromRGB(255, 170, 0), -- Dorado / Naranja
+        Prioridad = 4,
+        Frutas = {"portal", "rumble", "buddha", "phoenix", "sound", "pain", "love", "spider", "magma", "ghost"}
+    },
+    Rara = {
+        Color = Color3.fromRGB(170, 0, 255), -- Morado
+        Prioridad = 3,
+        Frutas = {"light", "dark", "ice", "sand", "diamond", "barrier", "rubber"}
+    },
+    PocoComun = {
+        Color = Color3.fromRGB(0, 170, 255), -- Azul
+        Prioridad = 2,
+        Frutas = {"flame", "falcon", "spike", "smoke", "bomb", "spring"}
+    },
+    Comun = {
+        Color = Color3.fromRGB(150, 150, 150), -- Gris
+        Prioridad = 1,
+        Frutas = {"rocket", "spin", "chop"}
+    }
+}
 
--- Buscar el enemigo vivo más cercano
-local function obtenerEnemigoCercano()
-    local distanciaCorta = math.huge
-    local enemigoObjetivo = nil
-    local char = LocalPlayer.Character
-
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
-
-    local npcs = Workspace:FindFirstChild("Enemies") or Workspace
-    for _, npc in pairs(npcs:GetChildren()) do
-        local hum = npc:FindFirstChild("Humanoid")
-        local hrp = npc:FindFirstChild("HumanoidRootPart")
-        
-        if hum and hrp and hum.Health > 0 then
-            local dist = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
-            if dist < distanciaCorta then
-                distanciaCorta = dist
-                enemigoObjetivo = npc
+-- Clasificar fruta
+local function obtenerInfoRareza(nombreObjeto)
+    local nom = string.lower(nombreObjeto)
+    
+    for _, datos in pairs(RAREZAS) do
+        for _, fNom in pairs(datos.Frutas) do
+            if string.find(nom, fNom) then
+                return datos.Color, datos.Prioridad
             end
         end
     end
-    return enemigoObjetivo
+    -- Si no está en la lista pero es fruta, se asigna como Mítica/Desconocida para no perderla
+    return Color3.fromRGB(0, 255, 127), 3
 end
 
--- Interfaz básica para probar
+-- Verificar si el objeto es fruta
+local function esFruta(obj)
+    if obj:IsA("Tool") or obj:IsA("Model") then
+        local nom = string.lower(obj.Name)
+        if string.find(nom, "fruit") or string.find(nom, "fruta") or obj:FindFirstChild("Handle") then
+            if not obj:IsDescendantOf(Players) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- Crear Interfaz GUI
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "AutoFarmBase"
+ScreenGui.Name = "FruitDetectorPro"
 ScreenGui.ResetOnSpawn = false
+
 pcall(function() ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end)
 
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 200, 0, 130)
+Frame.Position = UDim2.new(0.05, 0, 0.4, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Frame
+
+local Titulo = Instance.new("TextLabel")
+Titulo.Size = UDim2.new(1, 0, 0, 30)
+Titulo.Text = "Detector por Rareza"
+Titulo.TextColor3 = Color3.fromRGB(255, 255, 255)
+Titulo.BackgroundTransparency = 1
+Titulo.Font = Enum.Font.SourceSansBold
+Titulo.TextSize = 15
+Titulo.Parent = Frame
+
 local Boton = Instance.new("TextButton")
-Boton.Size = UDim2.new(0, 160, 0, 40)
-Boton.Position = UDim2.new(0.05, 0, 0.3, 0)
-Boton.Text = "FARM: OFF"
+Boton.Size = UDim2.new(0.85, 0, 0, 32)
+Boton.Position = UDim2.new(0.075, 0, 0.3, 0)
+Boton.Text = "ACTIVAR"
 Boton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 Boton.TextColor3 = Color3.fromRGB(255, 255, 255)
 Boton.Font = Enum.Font.SourceSansBold
-Boton.TextSize = 16
-Boton.Active = true
-Boton.Draggable = true
-Boton.Parent = ScreenGui
+Boton.TextSize = 14
+Boton.Parent = Frame
 
-Boton.MouseButton1Click:Connect(function()
-    autoFarm = not autoFarm
-    if autoFarm then
-        Boton.Text = "FARM: ON"
-        Boton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-    else
-        Boton.Text = "FARM: OFF"
-        Boton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+local BotonCorner = Instance.new("UICorner")
+BotonCorner.CornerRadius = UDim.new(0, 6)
+BotonCorner.Parent = Boton
+
+local BotonTP = Instance.new("TextButton")
+BotonTP.Size = UDim2.new(0.85, 0, 0, 32)
+BotonTP.Position = UDim2.new(0.075, 0, 0.65, 0)
+BotonTP.Text = "TP A MEJOR FRUTA"
+BotonTP.BackgroundColor3 = Color3.fromRGB(150, 50, 220)
+BotonTP.TextColor3 = Color3.fromRGB(255, 255, 255)
+BotonTP.Font = Enum.Font.SourceSansBold
+BotonTP.TextSize = 12
+BotonTP.Parent = Frame
+
+local TPCorner = Instance.new("UICorner")
+TPCorner.CornerRadius = UDim.new(0, 6)
+TPCorner.Parent = BotonTP
+
+local function limpiarLineas()
+    for _, l in pairs(lineas) do
+        if l then l:Remove() end
     end
-end)
+    lineas = {}
+end
 
--- Bucle principal del Farm
-task.spawn(function()
-    while task.wait(0.1) do
-        if autoFarm then
-            local char = LocalPlayer.Character
-            local objetivo = obtenerEnemigoCercano()
+-- Dibujar líneas con colores según la rareza
+RunService.RenderStepped:Connect(function()
+    limpiarLineas()
+    if not activo then return end
 
-            if char and char:FindFirstChild("HumanoidRootPart") and objetivo then
-                local hrpEnemigo = objetivo:FindFirstChild("HumanoidRootPart")
-                
-                if hrpEnemigo then
-                    -- Posiciona a tu personaje 5 studs arriba del enemigo
-                    char.HumanoidRootPart.CFrame = hrpEnemigo.CFrame * CFrame.new(0, 5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-                    
-                    -- Simula el clic de ataque
-                    VirtualUser:CaptureController()
-                    VirtualUser:ClickButton1(Vector2.new(500, 500))
+    for _, obj in pairs(Workspace:GetChildren()) do
+        if esFruta(obj) then
+            local parte = obj:FindFirstChild("Handle") or obj:FindFirstChildOfClass("BasePart")
+            if parte then
+                local posFruta, visible = Camera:WorldToViewportPoint(parte.Position)
+                if visible then
+                    local colorRareza, _ = obtenerInfoRareza(obj.Name)
+                    local linea = Drawing.new("Line")
+                    linea.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    linea.To = Vector2.new(posFruta.X, posFruta.Y)
+                    linea.Color = colorRareza
+                    linea.Thickness = 2.5
+                    linea.Transparency = 1
+                    linea.Visible = true
+                    table.insert(lineas, linea)
                 end
             end
         end
+    end
+end)
+
+Boton.MouseButton1Click:Connect(function()
+    activo = not activo
+    if activo then
+        Boton.Text = "DESACTIVAR"
+        Boton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        Boton.Text = "ACTIVAR"
+        Boton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        limpiarLineas()
+    end
+end)
+
+-- TP inteligente: busca la fruta de mayor rareza primero
+BotonTP.MouseButton1Click:Connect(function()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local mejorFruta = nil
+    local maxPrioridad = -1
+
+    for _, obj in pairs(Workspace:GetChildren()) do
+        if esFruta(obj) then
+            local parte = obj:FindFirstChild("Handle") or obj:FindFirstChildOfClass("BasePart")
+            if parte then
+                local _, prioridad = obtenerInfoRareza(obj.Name)
+                if prioridad > maxPrioridad then
+                    maxPrioridad = prioridad
+                    mejorFruta = parte
+                end
+            end
+        end
+    end
+
+    if mejorFruta then
+        char.HumanoidRootPart.CFrame = mejorFruta.CFrame * CFrame.new(0, 3, 0)
     end
 end)
