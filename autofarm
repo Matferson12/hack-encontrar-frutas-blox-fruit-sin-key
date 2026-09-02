@@ -1,0 +1,226 @@
+-- Auto Farm Híbrido con Slider de Distancia para Xeno
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+local autoFarm = false
+local modoArma = "Punos" -- Opciones: "Punos" o "Espada"
+local distanciaStuds = 20 -- Distancia por defecto (~6 metros)
+
+-- 1. Equipar el tipo de arma seleccionado
+local function equiparArma()
+    local char = LocalPlayer.Character
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if not char or not bp then return end
+
+    if modoArma == "Punos" then
+        local estilos = {"Combat", "Black Leg", "Electro", "Fishman Karate", "Dragon Claw", "Superhuman", "Death Step", "Sharkman Karate", "Electric Claw", "Dragon Talon", "Godhuman", "Sanguine Art"}
+        for _, item in pairs(bp:GetChildren()) do
+            if item:IsA("Tool") then
+                for _, nombreEstilo in pairs(estilos) do
+                    if string.find(string.lower(item.Name), string.lower(nombreEstilo)) then
+                        char.Humanoid:EquipTool(item)
+                        return
+                    end
+                end
+            end
+        end
+    elseif modoArma == "Espada" then
+        for _, item in pairs(bp:GetChildren()) do
+            if item:IsA("Tool") and item:FindFirstChild("ToolTip") and item.ToolTip == "Sword" then
+                char.Humanoid:EquipTool(item)
+                return
+            end
+        end
+    end
+end
+
+-- 2. Buscar enemigo más cercano
+local function obtenerEnemigoCercano()
+    local menorDist = math.huge
+    local objetivo = nil
+    local char = LocalPlayer.Character
+
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+
+    local carpetaEnemigos = Workspace:FindFirstChild("Enemies") or Workspace
+    for _, npc in pairs(carpetaEnemigos:GetChildren()) do
+        local hum = npc:FindFirstChild("Humanoid")
+        local hrp = npc:FindFirstChild("HumanoidRootPart")
+        
+        if hum and hrp and hum.Health > 0 and not Players:GetPlayerFromCharacter(npc) then
+            local dist = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
+            if dist < menorDist then
+                menorDist = dist
+                objetivo = npc
+            end
+        end
+    end
+    return objetivo
+end
+
+-- 3. Interfaz GUI con Slider de Distancia
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoFarmHibridoSlider"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end)
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 200, 0, 140)
+Frame.Position = UDim2.new(0.05, 0, 0.3, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local UICornerFrame = Instance.new("UICorner")
+UICornerFrame.CornerRadius = UDim.new(0, 8)
+UICornerFrame.Parent = Frame
+
+-- Botón Auto Farm ON/OFF
+local BotonFarm = Instance.new("TextButton")
+BotonFarm.Size = UDim2.new(0.9, 0, 0, 32)
+BotonFarm.Position = UDim2.new(0.05, 0, 0.06, 0)
+BotonFarm.Text = "FARM: OFF"
+BotonFarm.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+BotonFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
+BotonFarm.Font = Enum.Font.SourceSansBold
+BotonFarm.TextSize = 14
+BotonFarm.Parent = Frame
+
+local UICornerFarm = Instance.new("UICorner")
+UICornerFarm.CornerRadius = UDim.new(0, 6)
+UICornerFarm.Parent = BotonFarm
+
+BotonFarm.MouseButton1Click:Connect(function()
+    autoFarm = not autoFarm
+    if autoFarm then
+        BotonFarm.Text = "FARM: ON"
+        BotonFarm.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    else
+        BotonFarm.Text = "FARM: OFF"
+        BotonFarm.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    end
+end)
+
+-- Botón Selector de Arma
+local BotonArma = Instance.new("TextButton")
+BotonArma.Size = UDim2.new(0.9, 0, 0, 28)
+BotonArma.Position = UDim2.new(0.05, 0, 0.33, 0)
+BotonArma.Text = "ARMA: PUÑOS"
+BotonArma.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+BotonArma.TextColor3 = Color3.fromRGB(255, 255, 255)
+BotonArma.Font = Enum.Font.SourceSansBold
+BotonArma.TextSize = 13
+BotonArma.Parent = Frame
+
+local UICornerArma = Instance.new("UICorner")
+UICornerArma.CornerRadius = UDim.new(0, 6)
+UICornerArma.Parent = BotonArma
+
+BotonArma.MouseButton1Click:Connect(function()
+    if modoArma == "Punos" then
+        modoArma = "Espada"
+        BotonArma.Text = "ARMA: ESPADA"
+    else
+        modoArma = "Punos"
+        BotonArma.Text = "ARMA: PUÑOS"
+    end
+end)
+
+-- Etiqueta del Slider (Muestra los Metros)
+local SliderLabel = Instance.new("TextLabel")
+SliderLabel.Size = UDim2.new(0.9, 0, 0, 18)
+SliderLabel.Position = UDim2.new(0.05, 0, 0.58, 0)
+SliderLabel.BackgroundTransparency = 1
+SliderLabel.Text = "DISTANCIA: 6 METROS"
+SliderLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+SliderLabel.Font = Enum.Font.SourceSansBold
+SliderLabel.TextSize = 12
+SliderLabel.Parent = Frame
+
+-- Línea del Slider
+local SliderBarra = Instance.new("Frame")
+SliderBarra.Size = UDim2.new(0.85, 0, 0, 6)
+SliderBarra.Position = UDim2.new(0.075, 0, 0.8, 0)
+SliderBarra.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+SliderBarra.BorderSizePixel = 0
+SliderBarra.Parent = Frame
+
+local UICornerBarra = Instance.new("UICorner")
+UICornerBarra.CornerRadius = UDim.new(1, 0)
+UICornerBarra.Parent = SliderBarra
+
+-- Cubito para arrastrar
+local SliderCubo = Instance.new("ImageButton")
+SliderCubo.Size = UDim2.new(0, 16, 0, 16)
+SliderCubo.Position = UDim2.new(0.55, -8, -0.8, 0) -- Centrado inicialmente (~6 metros)
+SliderCubo.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+SliderCubo.AutoButtonColor = false
+SliderCubo.Parent = SliderBarra
+
+local UICornerCubo = Instance.new("UICorner")
+UICornerCubo.CornerRadius = UDim.new(0, 4)
+UICornerCubo.Parent = SliderCubo
+
+-- Lógica para arrastrar el cubo
+local arrastrando = false
+
+SliderCubo.MouseButton1Down:Connect(function()
+    arrastrando = true
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        arrastrando = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if arrastrando and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local posAbsolutaBarra = SliderBarra.AbsolutePosition.X
+        local tamanoAbsolutoBarra = SliderBarra.AbsoluteSize.X
+        local mouseX = input.Position.X
+
+        local porcentaje = math.clamp((mouseX - posAbsolutaBarra) / tamanoAbsolutoBarra, 0, 1)
+        SliderCubo.Position = UDim2.new(porcentaje, -8, -0.8, 0)
+
+        -- Escala: 1 metro (3.3 studs) hasta 10 metros (33 studs)
+        local metros = math.floor(1 + (porcentaje * 9))
+        distanciaStuds = math.floor(metros * 3.3)
+        SliderLabel.Text = "DISTANCIA: " .. tostring(metros) .. " METROS"
+    end
+end)
+
+-- 4. Bucle principal con distancia dinámica según el slider
+task.spawn(function()
+    while task.wait() do
+        if autoFarm then
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("HumanoidRootPart") then
+                    local enemigo = obtenerEnemigoCercano()
+                    
+                    if enemigo and enemigo:FindFirstChild("HumanoidRootPart") then
+                        equiparArma()
+
+                        local hrpEnemigo = enemigo.HumanoidRootPart
+                        -- Se aplica la distancia en studs elegida con el cubo
+                        char.HumanoidRootPart.CFrame = hrpEnemigo.CFrame * CFrame.new(0, 1, distanciaStuds)
+
+                        for _, parte in pairs(char:GetChildren()) do
+                            if parte:IsA("BasePart") then
+                                parte.CanCollide = false
+                            end
+                        end
+
+                        VirtualUser:CaptureController()
+                        VirtualUser:ClickButton1(Vector2.new(500, 500))
+                    end
+                end
+            end)
+        end
+    end
+end)
